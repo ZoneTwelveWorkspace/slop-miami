@@ -4,6 +4,7 @@ import {
   CENTRAL_PARK_BOUNDS,
   getIslandBoundsAtZ,
   isTypingInField,
+  isWaterAt,
   blockAt,
   streetZ
 } from './city-config.js';
@@ -33,8 +34,8 @@ import { polygonContact } from './building-collision.js';
 
 // Player models, animation and movement for walking, driving, cycling and flying.
 
-// Spawn on 5th Ave at 37th St, facing south down the avenue toward the Empire State Building (34th St)
-const SPAWN_Z = streetZ(37);
+// Spawn near the origin (Flagler St & Miami Ave)
+const SPAWN_Z = 0; // Miami: Miami Ave just south of Flagler St (main.js then moves a first-time player to Biscayne Blvd)
 const groundCollider = { type: 'ground' };
 
 const CAR_DRIVE = {
@@ -158,7 +159,7 @@ function createTaxiDoorDecalTexture() {
   ctx.fillStyle = '#111317';
   ctx.textAlign = 'left';
   ctx.font = '900 26px Inter, Arial, sans-serif';
-  ctx.fillText('NYC TAXI', 112, 42);
+  ctx.fillText('MIAMI TAXI', 112, 42);
   ctx.font = '700 15px JetBrains Mono, monospace';
   ctx.fillText('7Y48 · MEDALLION', 112, 68);
   ctx.font = '600 13px Inter, Arial, sans-serif';
@@ -187,7 +188,7 @@ function createNYLicensePlateTexture() {
   ctx.font = '900 48px JetBrains Mono, monospace';
   ctx.fillText('7Y48', 128, 82); // the cab's medallion number: a digit, a letter & two digits
   ctx.font = '700 13px Inter, Arial, sans-serif';
-  ctx.fillText('NYC T&LC', 128, 114);
+  ctx.fillText('MIAMI-DADE', 128, 114);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 16;
@@ -599,7 +600,7 @@ class ThirdPersonControllerManager {
 
     return {
       type: 'car',
-      label: 'NYC Yellow Taxi',
+      label: 'Miami Taxi',
       mesh: root,
       chassisPivot,
       carState,
@@ -762,7 +763,7 @@ class ThirdPersonControllerManager {
 
     return {
       type: 'cyclist',
-      label: 'NYC Bike Lane Cyclist',
+      label: 'Miami Cyclist',
       mesh: root,
       leanPivot,
       frontWheel,
@@ -945,6 +946,21 @@ class ThirdPersonControllerManager {
     const m = heli ? 6000 : 0;
     pos.x = Math.max(ISLAND_BOUNDS.minX - m, Math.min(ISLAND_BOUNDS.maxX + m, pos.x));
     pos.z = Math.max(ISLAND_BOUNDS.minZ + (heli ? -6000 : 30), Math.min(ISLAND_BOUNDS.maxZ + m, pos.z));
+    // Miami: the bay & the river (city-config.js isWaterAt) stop people and vehicles at the seawall: back to the last
+    // dry position
+    if (!heli && entity) {
+      if (isWaterAt(pos.x, pos.z)) {
+        if (Number.isFinite(entity._dryX)) {
+          pos.x = entity._dryX;
+          pos.z = entity._dryZ;
+        }
+        if (carEntity && carEntity.speed) carEntity.speed *= -0.25;
+        else if (entity.speed) entity.speed *= 0.3;
+      } else {
+        entity._dryX = pos.x;
+        entity._dryZ = pos.z;
+      }
+    }
     if (!heli && getIslandBoundsAtZ) {
       const shore = getIslandBoundsAtZ(pos.z);
       const minShoreX = shore.westX + 8.0;

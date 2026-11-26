@@ -1,4 +1,4 @@
-import { GEO } from './nyc-geodata.js';
+import { GEO } from './miami-geodata.js';
 import {
   ROADS,
   BLOCKS,
@@ -25,7 +25,11 @@ import {
   EAST_RIVER_BRIDGES,
   OUTER_BRIDGES,
   getLocationLabel,
-  isTypingInField
+  isTypingInField,
+  LAND_POLYGONS,
+  MIAMI_BEACH_POLYGON,
+  isWaterAt,
+  nearestRoads
 } from './city-config.js';
 
 // Minimap and full-screen map drawn from the same geography and building footprints as the 3D city.
@@ -33,10 +37,10 @@ import {
 // about 29 degrees east of true north.
 
 const FONT = 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-const MIN_ZOOM = 0.015; // full map, pixels per metre: the whole harbour, Staten Island to the Bronx
+const MIN_ZOOM = 0.06; // full map, pixels per metre: the bay from the mainland to Miami Beach
 const MAX_ZOOM = 3.0; // single lots
 const RADAR_SCALE = 0.32; // radar pixels per metre on the ground (zooms out with altitude)
-const GRID_BEARING = (GEO.frame && GEO.frame.bearingDeg) || 29.02; // Manhattan's grid north, degrees east of true north
+const GRID_BEARING = GEO.frame?.bearingDeg ?? 29.02; // Manhattan's grid north, degrees east of true north
 
 // Map palette, shared by the radar & the atlas (in step with css/style.css): graphite ground with the streets a shade
 // lighter than the blocks they run between, muted parks & water; a taxi-yellow GPS route, white landmarks & player,
@@ -218,8 +222,11 @@ function mapLayers() {
     ELLIS_ISLAND_POLYGON, MILL_ROCK_POLYGON])) addRing(L.islands, ring);
 
   // Manhattan inside its bulkhead line, and its piers
+  // Miami: every land mass of the land mask (the mainland either side of the river, Brickell Key, Watson Island & the
+  // Venetian Islands) and Miami Beach across the bay
   L.manhattan = new Path2D();
-  addRing(L.manhattan, MANHATTAN_COASTLINE);
+  for (const ring of rings(LAND_POLYGONS)) addRing(L.manhattan, ring);
+  addRing(L.land, MIAMI_BEACH_POLYGON);
   L.piers = new Path2D();
   for (const p of WATERFRONT_PIERS) if (p.ring) addRing(L.piers, p.ring);
 
@@ -472,7 +479,7 @@ class NYCMapSystem {
     this.searchPath = null;
     this.textWidths = new Map();
     // Start with a waypoint at Times Square / Broadway.
-    const ts = NYC_LANDMARKS.find((l) => l.id === 'timessquare') || { x: 0, z: 0 };
+    const ts = NYC_LANDMARKS.find((l) => l.id === 'freedom') || { x: 0, z: 0 };
     this.waypoint = { x: ts.x, z: ts.z, name: 'Times Square & 42nd St' };
 
     // Street names measured before the web font arrived would be spaced for the fallback font: measure & draw again
@@ -728,11 +735,24 @@ class NYCMapSystem {
     };
   }
 
-  // Teleports land on Manhattan: inside the island's extent at that latitude
+  // Teleports land in the detailed area, and on the nearest street when the click is on the water
   clampToManhattan(p) {
+    const x = Math.max(ISLAND_BOUNDS.minX + 25, Math.min(ISLAND_BOUNDS.maxX - 25, p.x));
     const z = Math.max(ISLAND_BOUNDS.minZ + 25, Math.min(ISLAND_BOUNDS.maxZ - 25, p.z));
-    const shore = getIslandBoundsAtZ(z);
-    return { x: Math.max(shore.westX + 12, Math.min(shore.eastX - 12, p.x)), z };
+    if (!isWaterAt(x, z)) return { x, z };
+    const near = nearestRoads(x, z, 900)[0];
+    if (!near) return { x, z };
+    let best = { x, z, d: Infinity };
+    const pts = near.road.pts;
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const a = pts[i], b = pts[i + 1];
+      const dx = b.x - a.x, dz = b.z - a.z;
+      const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.z) * dz) / (dx * dx + dz * dz || 1e-9)));
+      const qx = a.x + dx * t, qz = a.z + dz * t;
+      const d = Math.hypot(qx - x, qz - z);
+      if (d < best.d) best = { x: qx, z: qz, d };
+    }
+    return { x: best.x, z: best.z };
   }
 
   textWidth(ctx, text) {

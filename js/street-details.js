@@ -22,7 +22,8 @@ import { createSubwayEntranceParts, createFoodCartParts } from './street-props.j
 import { createSubwayEntrances } from './subway-entrances.js';
 import { pavedPlazaRects, centralParkClearings, parkTreeSites, parkLampSites } from './city-grid.js';
 import { pointInPolygon, polygonBounds, distToSegment } from './polygon.js';
-import { hashPos } from './random.js';
+import { hashPos, prand } from './random.js';
+import { createPalmField } from './palms.js';
 import { bryantParkLawn } from './landmarks.js';
 
 // Instanced street furniture, traffic signals, trees and nearby light pools.
@@ -105,7 +106,7 @@ function createWalkSignalMaterial(clock) {
 
 function buildStreetDetails(scene, colliders = []) {
   const group = new THREE.Group();
-  group.name = 'ManhattanStreetDetails';
+  group.name = 'MiamiStreetDetails';
 
   const dummy = new THREE.Object3D();
   const unitBox = new THREE.BoxGeometry(1, 1, 1);
@@ -529,14 +530,8 @@ function buildStreetDetails(scene, colliders = []) {
   // =========================================================================
   const godRayMat = createGodRayMaterial();
   const godRayGeo = new THREE.PlaneGeometry(54, 92);
-  const canyonShafts = [
-    { x: 0,    y: 42, z: 180,  rotY: 0.32,  rotZ: -0.46 }, // 34th St & 5th Ave (Empire State Canyon)
-    { x: 0,    y: 44, z: 0,    rotY: 0.28,  rotZ: -0.44 }, // 42nd St & 5th Ave (NYPL / Bryant Park)
-    { x: 165,  y: 46, z: 0,    rotY: 0.25,  rotZ: -0.45 }, // 42nd St & Park/Lexington (Grand Central & Chrysler)
-    { x: -110, y: 42, z: -90,  rotY: 0.30,  rotZ: -0.44 }, // 47th St & 6th Ave (Rockefeller Center)
-    { x: -215, y: 40, z: -45,  rotY: 0.35,  rotZ: -0.42 }, // Times Square / Broadway Canyon
-    { x: -55,  y: 48, z: -360, rotY: 0.28,  rotZ: -0.46 }  // 59th St / Central Park South Canyon
-  ];
+  // (Miami: none of the New York original's authored canyonShafts)
+  const canyonShafts = [];
   for (const cs of canyonShafts) {
     const shaft = new THREE.Mesh(godRayGeo, godRayMat);
     const at = fromOldFrame(cs.x, cs.z); // (authored on the former compressed grid)
@@ -549,22 +544,8 @@ function buildStreetDetails(scene, colliders = []) {
   // 3. CON EDISON ORANGE/WHITE STRIPED STEAM STACKS, NYCDOT SAWHORSE BARRICADES
   //    & BILLOWING WIND-DRIFTED VOLUMETRIC STEAM CLOUD TRAILS (REFERENCE PHOTO!)
   // =========================================================================
-  const steamLocations = [
-    { x: 6.4,   z: 96,   windX: -1.0, windZ: -0.18 }, // 5th Ave & 37th St (Buffer zone clear of green bike lane!)
-    { x: -7.5,  z: 148,  windX: 0.95, windZ: -0.22 }, // 5th Ave near 34th St (Empire State Building)
-    { x: 6.4,   z: 48,   windX: -1.0, windZ: 0.15  }, // 5th Ave & 40th St (NYPL / Bryant Park)
-    { x: -8.0,  z: -18,  windX: 0.92, windZ: -0.20 }, // 5th Ave & 43rd St
-    { x: -206,  z: -32,  windX: 0.95, windZ: 0.22  }, // Broadway / Times Square
-    { x: -228,  z: -98,  windX: 1.0,  windZ: -0.15 }, // 7th Ave & 45th St
-    { x: -102,  z: 22,   windX: -0.9, windZ: 0.20  }, // 6th Ave & Bryant Park
-    { x: 118,   z: -12,  windX: -1.0, windZ: -0.15 }, // Park Ave & 42nd St (Grand Central)
-    { x: 212,   z: -26,  windX: 0.92, windZ: 0.18  }, // Lexington Ave & 42nd St (Chrysler Building)
-    { x: 228,   z: -195, windX: -0.9, windZ: 0.16  }, // Lexington Ave & 51st St
-    { x: -118,  z: -148, windX: 0.95, windZ: -0.18 }, // 6th Ave & 48th St (Rockefeller Center)
-    { x: 6.4,   z: 285,  windX: -0.9, windZ: -0.22 }, // 5th Ave & 26th St (Flatiron)
-    { x: 6.4,   z: 615,  windX: -0.9, windZ: 0.18  }, // 5th Ave & Washington Square
-    { x: -212,  z: 1255, windX: 0.95, windZ: -0.20 }  // One WTC / Financial District
-  ];
+  // (Miami: none of the New York original's authored steamLocations)
+  const steamLocations = [];
   // (authored on the former compressed grid: carried onto the real streets; the Financial District one by One WTC)
   for (const st of steamLocations) {
     const wtc = LANDMARK_SITES['One World Trade Center'];
@@ -923,7 +904,21 @@ function buildStreetDetails(scene, colliders = []) {
   let sidewalkTreePositions = placeStreetTrees(REAL_TREES, treePositions,
     (x, z) => !inPlaza(x, z, 1.5) && isClearOfPoles(x, z, 2.2));
   for (const tree of sidewalkTreePositions) treePositions.push(tree);
-  const treeField = createTreeField(scene, treePositions, [...colliders, ...subwayColliders]);
+  // Miami: palms in the parks (city-grid.js flags them) and on about two thirds of the street tree sites; live oaks
+  // & shade trees (the broadleaf tree field) on the rest
+  const palmSites = [];
+  const broadleafPositions = [];
+  for (const t of treePositions) {
+    if (t.palm || (t.palm === undefined && prand(t.x, t.z, 77) < 0.65)) {
+      palmSites.push({ x: t.x, y: t.y ?? 0.22, z: t.z, scale: 0.85 + prand(t.z, t.x, 78) * 0.35 });
+    } else {
+      broadleafPositions.push(t);
+    }
+  }
+  const palmField = createPalmField(palmSites);
+  group.add(palmField.group);
+  console.info(`[streetDetails] ${palmField.count} palms`);
+  const treeField = createTreeField(scene, broadleafPositions, [...colliders, ...subwayColliders]);
   group.add(treeField.group);
   sidewalkTreePositions = sidewalkTreePositions.filter((t) => treeField.sites.has(t));
   console.info(`[streetDetails] ${treeField.stats.trees} trees (${sidewalkTreePositions.length} street trees)`);

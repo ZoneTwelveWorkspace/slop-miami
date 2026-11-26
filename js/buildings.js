@@ -32,7 +32,7 @@ import {
   createBillboardMaterial,
   filteredPulse
 } from './tsl-materials.js';
-import { GEO } from './nyc-geodata.js';
+import { GEO } from './miami-geodata.js';
 import { REAL_BUILDINGS } from './building-geodata.js';
 import { createBuildingFootprints } from './building-footprints.js';
 import { polygonContains, polygonBoxOverlaps } from './building-collision.js';

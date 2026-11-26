@@ -111,7 +111,7 @@ async function initApp() {
     renderer.dispose();
     renderer.domElement.remove();
     if (loadingFill) loadingFill.parentElement.style.visibility = 'hidden';
-    if (loadingStatus) loadingStatus.textContent = 'Slop New York needs WebGPU, which this browser does not have. Try a recent Chrome, Edge or Safari.';
+    if (loadingStatus) loadingStatus.textContent = 'Slop Miami needs WebGPU, which this browser does not have. Try a recent Chrome, Edge or Safari.';
     return;
   }
   markInit('renderer');
@@ -165,9 +165,11 @@ async function initApp() {
     contact: (c, x, y, z, r, out) => controllerManager.sphereContact(c, x, y, z, r, out)
   });
   // Reuse teleport placement so saved players return at rest, close to their last positions.
+  let restored = false;
   try {
-    const saved = JSON.parse(localStorage.getItem('nyc-player-state'));
+    const saved = JSON.parse(localStorage.getItem('miami-player-state'));
     if (saved?.version === 1) {
+      restored = true;
       for (const mode of Object.keys(controllerManager.entities)) {
         const p = saved.entities?.[mode];
         if (!p || ![p.x, p.y, p.z, p.heading].every(Number.isFinite)) continue;
@@ -177,13 +179,22 @@ async function initApp() {
       controllerManager.setMode(Object.hasOwn(controllerManager.entities, saved.activeMode) ? saved.activeMode : 'car');
     }
   } catch { /* Missing or unavailable storage does not prevent playing. */ }
+  // First visit: every mode starts on Biscayne Blvd by Bayfront Park, the car active
+  if (!restored && TELEPORT_LOCATIONS.spawn) {
+    const sp = TELEPORT_LOCATIONS.spawn;
+    for (const mode of Object.keys(controllerManager.entities)) {
+      controllerManager.setMode(mode);
+      controllerManager.teleportActiveTo(sp.x, sp.z, sp.heading);
+    }
+    controllerManager.setMode('car');
+  }
 
   function savePlayerState() {
     try {
       const entities = Object.fromEntries(Object.entries(controllerManager.entities).map(([mode, entity]) => [mode, {
         x: entity.position.x, y: entity.position.y, z: entity.position.z, heading: entity.heading
       }]));
-      localStorage.setItem('nyc-player-state', JSON.stringify({ version: 1, activeMode: controllerManager.activeMode, entities }));
+      localStorage.setItem('miami-player-state', JSON.stringify({ version: 1, activeMode: controllerManager.activeMode, entities }));
     } catch { /* Storage may be disabled or full. */ }
   }
 
@@ -214,7 +225,7 @@ async function initApp() {
   // Island-wide static geometry: chunk & distance-cull the small props, shadow stand-ins for the big casters
   // (scene-culling.js)
   await showLoadingStage('Preparing scene visibility and shadows...', 'culling');
-  const cullingRoots = ['ManhattanCityGrid', 'ManhattanCityBlocks', 'ManhattanStreetDetails', 'ManhattanLandmarks', 'Boroughs', 'RoadMarkings']
+  const cullingRoots = ['MiamiCityGrid', 'ManhattanCityBlocks', 'MiamiStreetDetails', 'MiamiSurroundings', 'RoadMarkings']
     .map((name) => scene.getObjectByName(name))
     .filter(Boolean);
   setupSceneCulling(scene, cullingRoots, lightingSystem.sunLight.shadow);

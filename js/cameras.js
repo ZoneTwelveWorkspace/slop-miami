@@ -1,5 +1,8 @@
 import * as THREE from 'three/webgpu';
-import { bryantParkLawn } from './landmarks.js';
+import { NYC_LANDMARKS } from './city-config.js';
+
+// Scenic cameras frame Miami landmarks by their positions (city-config.js)
+const LM = (id) => NYC_LANDMARKS.find((l) => l.id === id) || { x: 0, z: 0 };
 
 // Chase, action, cockpit, fixed-location and aerial cameras, with mouse/touch orbit and zoom.
 
@@ -7,13 +10,13 @@ const CAMERA_PRESETS = [
   { id: 'chase',       name: '3rd-Person Chase',         category: 'follow', fov: 56 },
   { id: 'action',      name: 'Low-Angle Action',         category: 'follow', fov: 60 },
   { id: 'pov',         name: 'First-Person / Cockpit',   category: 'follow', fov: 68 },
-  { id: 'centralPark', name: 'Central Park Oasis',       category: 'scenic', fov: 52 },
-  { id: 'fifthAve',    name: '5th Ave & Empire State',   category: 'scenic', fov: 48 },
-  { id: 'timesSquare', name: 'Times Square Crossroads',  category: 'scenic', fov: 58 },
-  { id: 'chryslerGCT', name: '42nd St · Chrysler & GCT', category: 'scenic', fov: 50 },
-  { id: 'observatory', name: 'Empire State 86th Deck',   category: 'scenic', fov: 52 },
-  { id: 'bryantPark',  name: 'Bryant Park & NYPL',       category: 'scenic', fov: 52 },
-  { id: 'waterfront',  name: 'East River & Skyline',     category: 'scenic', fov: 46 },
+  { id: 'centralPark', name: 'Bayfront Park & the Bay',       category: 'scenic', fov: 52 },
+  { id: 'fifthAve',    name: 'Biscayne Blvd Palms',   category: 'scenic', fov: 48 },
+  { id: 'timesSquare', name: 'Brickell Ave Canyon',  category: 'scenic', fov: 58 },
+  { id: 'chryslerGCT', name: 'Freedom Tower', category: 'scenic', fov: 50 },
+  { id: 'observatory', name: 'Panorama Tower Rooftop',   category: 'scenic', fov: 52 },
+  { id: 'bryantPark',  name: 'Miami River Mouth',       category: 'scenic', fov: 52 },
+  { id: 'waterfront',  name: 'Skyline from Biscayne Bay',     category: 'scenic', fov: 46 },
   { id: 'drone',       name: 'Auto-Director Aerial',     category: 'scenic', fov: 50 }
 ];
 
@@ -267,73 +270,75 @@ class CameraSystem {
       }
 
       case 'centralPark': {
-        // Above the southern canopy, looking across The Pond toward the park and skyline.
+        // Above Bayfront Park's palms, looking east over the lawn to Biscayne Bay
         const sway = Math.sin(elapsed * 0.22) * 3.5;
-        desiredPos.set(-70.0 + sway, 26.0, -1425.0);
-        desiredLook.set(-250.0, 6.5, -1690.0);
+        const p = LM('bayfront');
+        desiredPos.set(p.x - 160 + sway, 24.0, p.z + 40);
+        desiredLook.set(p.x + 400, 4.0, p.z - 120);
         break;
       }
 
       case 'fifthAve': {
-        // 5th Avenue & 42nd St looking South down the 5th Ave canyon toward the Empire State Building
+        // Biscayne Blvd at street level, looking south down the palm-lined boulevard into Downtown
         const sway = Math.sin(elapsed * 0.25) * 1.8;
-        desiredPos.set(0.0 + sway, 6.5, -20.0);
-        desiredLook.set(-60.0, 150.0, 686.0);
+        const p = LM('freedom');
+        desiredPos.set(p.x - 70 + sway, 6.5, p.z + 40);
+        desiredLook.set(p.x - 120, 60.0, p.z + 900);
         break;
       }
 
       case 'timesSquare': {
-        // Times Square & Broadway looking across Duffy Square red steps and One Times Square billboards
+        // Brickell Ave between its towers, looking north toward the river and Downtown
         const sway = Math.sin(elapsed * 0.3) * 3.0;
-        desiredPos.set(-603.0 + sway, 5.5, -290.0);
-        desiredLook.set(-566.0, 40.0, -40.0);
+        const p = LM('panorama');
+        desiredPos.set(p.x - 60 + sway, 5.5, p.z + 260);
+        desiredLook.set(p.x - 260, 70.0, p.z - 600);
         break;
       }
 
       case 'chryslerGCT': {
-        // Park Ave & 42nd St intersection looking straight at Grand Central, MetLife, and Chrysler Building Crown
+        // Looking up at the Freedom Tower from across Biscayne Blvd
         const sway = Math.cos(elapsed * 0.22) * 2.5;
-        desiredPos.set(300.0 + sway, 9.5, 95.0);
-        desiredLook.set(470.0, 120.0, -50.0);
+        const p = LM('freedom');
+        desiredPos.set(p.x + 110 + sway, 9.5, p.z + 60);
+        desiredLook.set(p.x, 45.0, p.z);
         break;
       }
 
       case 'observatory': {
-        // Empire State Building 86th Floor Deck looking North-East across Midtown skyline
-        const pan = Math.sin(elapsed * 0.18) * 80.0;
-        desiredPos.set(-58.0, 322.0, 660.0);
-        desiredLook.set(420.0 + pan, 150.0, -200.0);
+        // Panorama Tower's roof, panning across Downtown, the river and the bay to the north
+        const pan = Math.sin(elapsed * 0.18) * 260.0;
+        const p = LM('panorama');
+        desiredPos.set(p.x, 262.0, p.z);
+        desiredLook.set(p.x + pan, 90.0, p.z - 1400);
         break;
       }
 
       case 'bryantPark': {
-        // Inside Bryant Park Great Lawn looking East toward NYPL portico, One Vanderbilt & Chrysler Building
+        // Over the Miami River near its mouth, looking upriver between Downtown and Brickell
         const sway = Math.sin(elapsed * 0.25) * 1.5;
-        const lawn = bryantParkLawn || { minX: -260, maxX: -150, minZ: 40, maxZ: 120, top: 1.3 };
-        const lz = (lawn.minZ + lawn.maxZ) * 0.5;
-        desiredPos.set(lawn.minX + 18.0, lawn.top + 1.7, lz + sway);
-        desiredLook.set(lawn.maxX + 260.0, 70.0, lz - 60.0);
+        const p = LM('riverwalk');
+        desiredPos.set(p.x + 420, 14.0 + sway, p.z + 40);
+        desiredLook.set(p.x - 300, 30.0, p.z - 20);
         break;
       }
 
       case 'waterfront': {
-        // Over the shimmering East River looking across the FDR Drive, Queensboro Bridge & Midtown Skyline
-        const drift = Math.sin(elapsed * 0.15) * 40.0;
-        desiredPos.set(1640.0, 60.0, 60.0 + drift);
-        desiredLook.set(150.0, 150.0, -150.0);
+        // Out over Biscayne Bay, looking back west at the Downtown & Brickell skyline
+        const drift = Math.sin(elapsed * 0.15) * 60.0;
+        const p = LM('bayfront');
+        desiredPos.set(p.x + 1500, 45.0, p.z + 500 + drift);
+        desiredLook.set(p.x - 400, 110.0, p.z + 300);
         break;
       }
 
       case 'drone': {
         const angle = elapsed * 0.07 + 0.65;
-        const radius = 720.0 + Math.sin(elapsed * 0.23) * 140.0;
-        const alt = 330.0 + Math.cos(elapsed * 0.19) * 90.0;
-        desiredPos.set(
-          Math.cos(angle) * radius + 60.0,
-          alt,
-          Math.sin(angle) * radius + 250.0
-        );
-        desiredLook.set(60.0, 160.0, 250.0);
+        const radius = 900.0 + Math.sin(elapsed * 0.23) * 160.0;
+        const alt = 300.0 + Math.cos(elapsed * 0.19) * 80.0;
+        const c = LM('miamitower');
+        desiredPos.set(Math.cos(angle) * radius + c.x, alt, Math.sin(angle) * radius + c.z + 300);
+        desiredLook.set(c.x, 110.0, c.z + 300);
         break;
       }
     }

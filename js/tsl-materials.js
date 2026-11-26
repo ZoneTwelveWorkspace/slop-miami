@@ -59,7 +59,7 @@ import {
   specularColorBlended,
   specularF90
 } from 'three/tsl';
-import {
+import { BLOCKS,
   CENTRAL_PARK_BOUNDS,
   ISLAND_BOUNDS,
   getIslandBoundsAtZ,
@@ -3142,10 +3142,10 @@ function createWaterMaterial() {
   const fresnel = pow(float(1.0).sub(clamp(dot(waterNormal, viewDir), 0.0, 1.0)), 5.0).mul(0.98).add(0.02);
   mat.metalnessNode = clamp(fresnel.mul(1.6), 0.0, 0.9);
 
-  // Sediment-laden estuary: deep blue-green grey ↔ silty olive grey; thin sunlit crests transmit a greener tint
+  // Biscayne Bay: clear, shallow turquoise over sand & seagrass (darker patches); thin sunlit crests transmit greener
   mat.colorNode = Fn(() => {
     const silt = noise2D(positionWorld.xz.mul(0.0031).add(7.3));
-    const body = mix(color(0x162d2c), color(0x2e3f36), smoothstep(0.25, 0.85, silt));
+    const body = mix(color(0x0d4a52), color(0x1b6b68), smoothstep(0.25, 0.85, silt));
     const lake = mix(color(0x24321f), color(0x33402a), silt);
     const crestTint = smoothstep(0.6, 2.4, waves.w).mul(0.35).add(1.0);
     return mix(body, lake, pond).mul(crestTint);
@@ -3159,16 +3159,22 @@ function createWaterMaterial() {
   // the island ~1.1 km apart, the NJ shore west of it & the Brooklyn / Queens shore east of it every 900 m of z
 
   const IB = ISLAND_BOUNDS;
+  // Miami: the lit city as boxes around the blocks of each ~700 m cell of the detailed area (Downtown, Brickell, the
+  // Omni / Edgewater edge, Brickell Key), inset from their outer curbs
   const MANHATTAN_BOXES = [];
-  for (let z0 = IB.minZ; z0 < IB.maxZ - 1; z0 += 1140) {
-    const z1 = Math.min(IB.maxZ, z0 + 1140);
-    let x0 = -Infinity, x1 = Infinity;
-    for (let z = z0; z <= z1 + 0.1; z += (z1 - z0) / 8) {
-      const s = getIslandBoundsAtZ(z);
-      x0 = Math.max(x0, s.westX + 40);
-      x1 = Math.min(x1, s.eastX - 40);
+  {
+    const cells = new Map();
+    for (const b of BLOCKS) {
+      if (b.park > 0.6 || b.area < 400) continue;
+      const k = Math.floor(b.cx / 700) + "," + Math.floor(b.cz / 700);
+      const c = cells.get(k) || { x0: Infinity, z0: Infinity, x1: -Infinity, z1: -Infinity, n: 0 };
+      c.x0 = Math.min(c.x0, b.minX); c.z0 = Math.min(c.z0, b.minZ); c.x1 = Math.max(c.x1, b.maxX); c.z1 = Math.max(c.z1, b.maxZ); c.n++;
+      cells.set(k, c);
     }
-    if (x1 - x0 > 100) MANHATTAN_BOXES.push([Math.round(x0), Math.round(z0), Math.round(x1), Math.round(z1)]);
+    for (const c of cells.values()) {
+      if (c.n < 4 || c.x1 - c.x0 < 120 || c.z1 - c.z0 < 120) continue;
+      MANHATTAN_BOXES.push([Math.round(c.x0 + 20), Math.round(c.z0 + 20), Math.round(c.x1 - 20), Math.round(c.z1 - 20)]);
+    }
   }
   const crossings = (polys, z) => {
     const xs = [];
@@ -3262,12 +3268,12 @@ function createWaterMaterial() {
         const u = hit.x.add(hit.y); // runs along whichever face was hit
 
         // Skyline heights: Midtown (60th to 28th St) & the Financial District (south of Chambers St) stand tallest
-        const midtown = smoothstep(zSt(80), zSt(60), hit.y).mul(float(1.0).sub(smoothstep(zSt(28), zSt(14), hit.y)));
-        const manhattanS = mix(float(70.0), float(215.0), max(midtown, smoothstep(4400.0, 4950.0, hit.y)));
+        // Miami: Downtown & Brickell (south of the river, z > 300) both run to 200 m+ towers
+        const manhattanS = mix(float(150.0), float(215.0), smoothstep(200.0, 700.0, hit.y));
         // Across the rivers: the Jersey City towers (Newport to Exchange Place) & Long Island City (opposite 60th-26th St)
-        const jerseyCity = smoothstep(3300.0, 3900.0, hit.y).mul(float(1.0).sub(smoothstep(6100.0, 6500.0, hit.y))).mul(step(hit.x, 0.0));
-        const lic = smoothstep(zSt(62), zSt(57), hit.y).mul(float(1.0).sub(smoothstep(zSt(30), zSt(25), hit.y))).mul(step(0.0, hit.x));
-        const S = mix(mix(mix(float(30.0), float(120.0), max(jerseyCity, lic)), manhattanS, onIsland), float(120.0), lake);
+        // Across the bay: Miami Beach's condo & hotel row to the east
+        const beach = step(0.0, hit.x);
+        const S = mix(mix(mix(float(30.0), float(110.0), beach), manhattanS, onIsland), float(120.0), lake);
         const brightness = mix(mix(float(0.6), float(1.0), onIsland), float(0.8), lake);
 
         // Footprint on the facades (m): unresolved slopes tilt the reflection ±2σ, laterally foreshortened at grazing views
