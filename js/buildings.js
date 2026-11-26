@@ -151,32 +151,32 @@ function buildCityBlocks(scene, landmarkColliders = []) {
   const allBlocks = [];
 
   const facades = [
-    // 0: Pre-War Limestone & Buff Brick (5th Ave / Madison Ave / Upper East Side style)
+    // 0: Miami white stucco (Downtown & Brickell low- and mid-rises, MiMo blocks)
     [createPreWarBuildingMaterial, {
-      stoneColor: 0xd8cdb8,
-      trimColor: 0x9e937f,
-      windowGlassColor: 0x1a2836,
+      stoneColor: 0xeee9dd,
+      trimColor: 0xd6cfbf,
+      windowGlassColor: 0x1d3a42,
       windowWidth: 2.6,
       floorHeight: 3.7,
       litProbability: 0.54,
       warmth: 0.80,
       seed: 12.4
     }],
-    // 1: Historic Warm Red/Terracotta Brick (Garment District / Chelsea / SoHo / Upper West Side)
+    // 1: Pastel Art Deco stucco (coral / peach with cream trim)
     [createPreWarBuildingMaterial, {
-      stoneColor: 0xa45a45,
-      trimColor: 0xcab9a0,
-      windowGlassColor: 0x16222e,
+      stoneColor: 0xe8bfa4,
+      trimColor: 0xf3ece0,
+      windowGlassColor: 0x1b3640,
       windowWidth: 2.4,
       floorHeight: 3.5,
       litProbability: 0.56,
       warmth: 0.86,
       seed: 27.8
     }],
-    // 2: Blue-Teal Curtain-Wall Glass (Park Ave / 6th Ave / Financial District modernism)
+    // 2: Brickell blue-green glass with white slab edges & balcony frames
     [createCurtainWallMaterial, {
-      glassTint: 0x1a3a52,
-      frameTint: 0x3b4c5b,
+      glassTint: 0x1d4e5e,
+      frameTint: 0xdfe4e6,
       windowWidth: 2.7,
       floorHeight: 3.9,
       litProbability: 0.60,
@@ -184,10 +184,10 @@ function buildCityBlocks(scene, landmarkColliders = []) {
       reflectivity: 0.92,
       seed: 63.5
     }],
-    // 3: Dark Bronze / Charcoal Miesian Glass (Avenue of the Americas / Midtown West)
+    // 3: Dark teal office glass (Downtown's 1980s towers)
     [createCurtainWallMaterial, {
-      glassTint: 0x242220,
-      frameTint: 0x3c3631,
+      glassTint: 0x1b3238,
+      frameTint: 0x4a5a5e,
       windowWidth: 2.5,
       floorHeight: 3.8,
       litProbability: 0.64,
@@ -337,9 +337,10 @@ function buildCityBlocks(scene, landmarkColliders = []) {
     const seed = Math.round(b.cx * 31 + b.cz * 17);
     const rand = mulberry32(seed);
     const tone = rand();
-    const mat = b.year && b.year < 1945 ? (tone < 0.8 ? 0 : 1)
-      : b.year && b.year < 1980 ? (tone < 0.55 ? 0 : 3)
-        : tone < 0.6 ? 2 : 4;
+    // Miami: glass towers, mid-rises mixing stucco & glass, low-rise white & pastel stucco
+    const mat = b.height >= 35 ? (tone < 0.55 ? 2 : tone < 0.85 ? 4 : 3)
+      : b.height >= 15 ? (tone < 0.5 ? 0 : tone < 0.75 ? 2 : 1)
+        : tone < 0.7 ? 0 : 1;
     // The survey has no building-use data; choose retail independently of facade style and roof details.
     const storefronts = b.height >= 6 && mulberry32(seed ^ 0x53544f52)() < 0.55;
     const record = { ...b, tone, storefronts };

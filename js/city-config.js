@@ -278,14 +278,16 @@ function arrivalNear(x, z, back = 40) {
       const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.z) * dz) / (dx * dx + dz * dz || 1e-9)));
       const qx = a.x + dx * t, qz = a.z + dz * t;
       const d = Math.hypot(qx - x, qz - z);
-      if (!best || d < best.d) best = { d, x: qx, z: qz };
+      if (!best || d < best.d) best = { d, x: qx, z: qz, dx, dz };
     }
-    if (best && best.d > back) {
-      px = best.x;
-      pz = best.z;
-    } else if (best) {
-      px = best.x;
-      pz = best.z;
+    if (best) {
+      // Back off along the street so the landmark stands ahead, beside the road, and face down the street
+      const L = Math.hypot(best.dx, best.dz) || 1;
+      let ux = best.dx / L, uz = best.dz / L;
+      if (ux * (x - best.x) + uz * (z - best.z) < 0) { ux = -ux; uz = -uz; }
+      px = best.x - ux * back;
+      pz = best.z - uz * back;
+      return { x: px, z: pz, heading: Math.atan2(ux, uz) };
     }
   }
   return { x: px, z: pz, heading: Math.atan2(x - px, z - pz) };

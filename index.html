@@ -6,15 +6,14 @@
   <title>Slop Miami</title>
   <link rel="icon" href="data:," />
   <meta name="description" content="A free-roam 3D Downtown Miami & Brickell built on Slop New York (three.js WebGPURenderer & TSL): real OpenStreetMap streets and buildings, walk, drive, cycle or fly over Biscayne Bay." />
-  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
-  <!-- three.js r188dev, pinned to dev commit 1d37728 (GitHub, served by jsDelivr) -->
+  <!-- three.js r188dev, pinned to dev commit 1d37728, vendored in vendor/three/ (tools/vendor-three.mjs) -->
   <script type="importmap">
     {
       "imports": {
-        "three": "https://cdn.jsdelivr.net/gh/mrdoob/three.js@1d3772857eb8970ce24b3757980c5e9d46c0d6ff/build/three.webgpu.js",
-        "three/webgpu": "https://cdn.jsdelivr.net/gh/mrdoob/three.js@1d3772857eb8970ce24b3757980c5e9d46c0d6ff/build/three.webgpu.js",
-        "three/tsl": "https://cdn.jsdelivr.net/gh/mrdoob/three.js@1d3772857eb8970ce24b3757980c5e9d46c0d6ff/build/three.tsl.js",
-        "three/addons/": "https://cdn.jsdelivr.net/gh/mrdoob/three.js@1d3772857eb8970ce24b3757980c5e9d46c0d6ff/examples/jsm/"
+        "three": "./vendor/three/build/three.webgpu.js",
+        "three/webgpu": "./vendor/three/build/three.webgpu.js",
+        "three/tsl": "./vendor/three/build/three.tsl.js",
+        "three/addons/": "./vendor/three/examples/jsm/"
       }
     }
   </script>

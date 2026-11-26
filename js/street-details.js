@@ -17,6 +17,7 @@ import {
 import { cityUniforms, createSteamMaterial, createTreeGrateMaterial, createGodRayMaterial } from './tsl-materials.js';
 import { createTreeField } from './trees.js';
 import { REAL_TREES } from './tree-geodata.js';
+import { CURB_TREES } from './curb-trees.js';
 import { placeStreetTrees } from './tree-placements.js';
 import { createSubwayEntranceParts, createFoodCartParts } from './street-props.js';
 import { createSubwayEntrances } from './subway-entrances.js';
@@ -901,7 +902,10 @@ function buildStreetDetails(scene, colliders = []) {
   for (const s of parkTreeSites || []) treePositions.push(s);
 
   // Surveyed street trees; parks keep their authored terrain, clearings and tree layouts.
-  let sidewalkTreePositions = placeStreetTrees(REAL_TREES, treePositions,
+  const streetTreeSites = new Float32Array(REAL_TREES.length + CURB_TREES.length);
+  streetTreeSites.set(REAL_TREES);
+  streetTreeSites.set(CURB_TREES, REAL_TREES.length);
+  let sidewalkTreePositions = placeStreetTrees(streetTreeSites, treePositions,
     (x, z) => !inPlaza(x, z, 1.5) && isClearOfPoles(x, z, 2.2));
   for (const tree of sidewalkTreePositions) treePositions.push(tree);
   // Miami: palms in the parks (city-grid.js flags them) and on about two thirds of the street tree sites; live oaks
