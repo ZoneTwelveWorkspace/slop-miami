@@ -38,6 +38,12 @@ import { polygonContact } from './building-collision.js';
 const SPAWN_Z = 0; // Miami: Miami Ave just south of Flagler St (main.js then moves a first-time player to Biscayne Blvd)
 const groundCollider = { type: 'ground' };
 
+// Getting in & out ([E]): each vehicle's body half length & half width (m) and how close the walker must come to it
+const VEHICLE_REACH = [['car', 2.45, 1.0, 2.8], ['cyclist', 0.95, 0.35, 1.4], ['helicopter', 5.5, 1.6, 2.6]];
+// Where the walker steps out: metres to the vehicle's left of its centre
+const EXIT_SIDE = { car: 3.1, cyclist: 1.1, helicopter: 4.2 };
+const HELI_LANDED_Y = 3.5;
+
 const CAR_DRIVE = {
   speed: 36, reverseSpeed: 10.5, acceleration: 4.5,
   powerSpeed: 14.5, // Above 52 km/h, engine power limits acceleration.
@@ -258,7 +264,7 @@ class ThirdPersonControllerManager {
       backward: ['KeyS', 'ArrowDown'],
       left: ['KeyA', 'ArrowLeft'],
       right: ['KeyD', 'ArrowRight'],
-      up: ['Space', 'KeyE'],
+      up: ['Space'],
       down: ['KeyQ', 'KeyC']
     };
     const actionsByCode = new Map(Object.entries(bindings).flatMap(([action, codes]) => codes.map((code) => [code, action])));
@@ -330,6 +336,8 @@ class ThirdPersonControllerManager {
   setMode(mode) {
     if (!this.entities[mode]) return;
     this.activeMode = mode;
+    // On foot, or riding inside the active vehicle (hidden & carried along, see update / poseCharacters)
+    if (this.entities.person) this.entities.person._inside = mode !== 'person';
     const active = this.entities[mode];
     if (active.mesh) active.mesh.visible = true;
     if (active.helmet) active.helmet.visible = true;
@@ -344,6 +352,63 @@ class ThirdPersonControllerManager {
 
   getActiveEntity() {
     return this.entities[this.activeMode];
+  }
+
+  /** The vehicle within reach of the walking player (body-to-body distance), or null: { type, dist, label } */
+  nearestVehicle() {
+    const p = this.entities.person;
+    let best = null;
+    for (const [type, halfL, halfW, reach] of VEHICLE_REACH) {
+      const v = this.entities[type];
+      if (!v || (type === 'helicopter' && v.position.y > HELI_LANDED_Y)) continue;
+      const dx = p.position.x - v.position.x, dz = p.position.z - v.position.z;
+      const fx = Math.sin(v.heading), fz = Math.cos(v.heading);
+      const along = dx * fx + dz * fz, across = dx * fz - dz * fx;
+      const d = Math.hypot(Math.max(0, Math.abs(along) - halfL), Math.max(0, Math.abs(across) - halfW));
+      if (d <= reach && (!best || d < best.dist)) best = { type, dist: d, label: v.label };
+    }
+    return best;
+  }
+
+  /**
+   * [E]: on foot, get into the vehicle within reach; driving, get out on the driver's side and leave it parked there.
+   * Returns { action: 'enter' | 'exit' | 'blocked' | 'none', mode, label, reason }
+   */
+  interact() {
+    const p = this.entities.person;
+    if (this.activeMode === 'person') {
+      if (p.jumping) return { action: 'none' };
+      const v = this.nearestVehicle();
+      if (!v) return { action: 'none' };
+      this.resetInput();
+      p.speed = 0;
+      this.setMode(v.type);
+      const e = this.entities[v.type];
+      e.speed = 0;
+      return { action: 'enter', mode: v.type, label: e.label };
+    }
+    const mode = this.activeMode;
+    const e = this.entities[mode];
+    if (mode === 'helicopter' && e.position.y > HELI_LANDED_Y) return { action: 'blocked', reason: 'airborne', mode, label: e.label };
+    if (Math.abs(e.speed || 0) > 6) return { action: 'blocked', reason: 'moving', mode, label: e.label };
+    // Park it where it stands
+    e.speed = 0;
+    if (mode === 'car') {
+      e.vx = e.vz = e.angularVel = e.steerAngle = 0;
+      for (const wheel of e.wheels) if (wheel.isFront) wheel.steerPivot.rotation.y = 0;
+    } else if (mode === 'cyclist') {
+      e.leanAngle = e.leanPivot.rotation.z = 0;
+    } else if (mode === 'helicopter') {
+      e.verticalSpeed = e.pitchAngle = e.rollAngle = 0;
+      e.tiltPivot.rotation.x = e.tiltPivot.rotation.z = 0;
+      e.position.y = 0.25;
+    }
+    // Step out on the driver's (left) side; teleportActiveTo finds the nearest clear spot if that side is blocked
+    const h = e.heading;
+    const side = EXIT_SIDE[mode];
+    this.setMode('person');
+    this.teleportActiveTo(e.position.x + Math.cos(h) * side, e.position.z - Math.sin(h) * side, h);
+    return { action: 'exit', mode: 'person', from: mode, label: e.label };
   }
 
   teleportActiveTo(x, z, heading = Math.PI, savedAltitude = null) {
@@ -415,7 +480,7 @@ class ThirdPersonControllerManager {
     const entity = this.getActiveEntity();
     // Conservative body cylinders, including the taxi's corners, bicycle wheels and helicopter tail/rotor.
     const body = { person: [0.48, 1.9], car: [2.4, 1.9], cyclist: [1.0, 1.9], helicopter: [6.2, 3.2] };
-    const others = Object.values(this.entities).filter(e => e !== entity).map(e => ({
+    const others = Object.values(this.entities).filter(e => e !== entity && !e._inside).map(e => ({
       x: e.position.x, z: e.position.z, radius: body[e.type][0],
       bottom: e.position.y - (e.type === 'helicopter' ? 0.7 : 0), top: e.position.y + body[e.type][1]
     }));
@@ -1054,7 +1119,7 @@ class ThirdPersonControllerManager {
     if (p) {
       const dx = focus ? p.position.x - focus.x : 0;
       const dz = focus ? p.position.z - focus.z : 0;
-      if (this.activeMode === 'person' || dx * dx + dz * dz <= maxDistSq) {
+      if (this.activeMode === 'person') {
         p._charHidden = false;
         if (p.mesh) p.mesh.visible = true;
         const groundY = this.getGroundHeight(p.position.x, p.position.z, 'person');
@@ -1084,7 +1149,7 @@ class ThirdPersonControllerManager {
     if (b) {
       const dx = focus ? b.position.x - focus.x : 0;
       const dz = focus ? b.position.z - focus.z : 0;
-      if (this.activeMode === 'cyclist' || dx * dx + dz * dz <= maxDistSq) {
+      if (this.activeMode === 'cyclist') {
         if (b.helmet) b.helmet.visible = true;
         const moved =
           this.activeMode === 'cyclist' ||
@@ -1124,30 +1189,30 @@ class ThirdPersonControllerManager {
 
   update(dt, elapsed, focusPos = null) {
     const heli = this.entities.helicopter;
-    heli.mainRotorPivot.rotation.y = (heli.mainRotorPivot.rotation.y + dt * MAIN_ROTOR.rate) % (Math.PI * 2);
-    heli.tailRotorPivot.rotation.x = (heli.tailRotorPivot.rotation.x + dt * TAIL_ROTOR.rate) % (Math.PI * 2);
+    // The rotors spool up over ~3 s with the player aboard and wind down once it's parked
+    const spoolTo = this.activeMode === 'helicopter' ? 1 : 0;
+    heli._spool = (heli._spool ?? spoolTo) + Math.max(-dt * 0.3, Math.min(dt * 0.35, spoolTo - (heli._spool ?? spoolTo)));
+    const spool = heli._spool * heli._spool;
+    heli.mainRotorPivot.rotation.y = (heli.mainRotorPivot.rotation.y + dt * MAIN_ROTOR.rate * spool) % (Math.PI * 2);
+    heli.tailRotorPivot.rotation.x = (heli.tailRotorPivot.rotation.x + dt * TAIL_ROTOR.rate * spool) % (Math.PI * 2);
     // The blades blur over the angle they turn while a camera's shutter is open: half the frame (a 180° shutter)
-    heli.mainRotorDisc.sweep.value = dt * 0.5 * MAIN_ROTOR.rate;
-    heli.tailRotorDisc.sweep.value = dt * 0.5 * TAIL_ROTOR.rate;
+    heli.mainRotorDisc.sweep.value = dt * 0.5 * MAIN_ROTOR.rate * spool;
+    heli.tailRotorDisc.sweep.value = dt * 0.5 * TAIL_ROTOR.rate * spool;
 
     if (this.activeMode === 'person') {
       this.updatePerson(dt, elapsed);
     } else {
-      // Keep the sidewalk pedestrian walking naturally on the ground when not actively controlled
+      // In a vehicle: the player rides along inside it (hidden, see poseCharacters)
       const p = this.entities.person;
-      const walkSpeed = 1.48;
-      p.prevX = p.position.x;
-      p.prevZ = p.position.z;
-      p.speed = walkSpeed;
+      const v = this.getActiveEntity();
+      p.speed = 0;
       p.jumping = false;
       p.jumpPrep = 0;
       p.verticalVel = 0;
-      p.position.x += Math.sin(p.heading) * walkSpeed * dt;
-      p.position.z += Math.cos(p.heading) * walkSpeed * dt;
-      this.resolveHorizontalCollision(p.position, 0.48, null, p);
-      p.position.y = this.getGroundHeight(p.position.x, p.position.z, 'person');
-      if (p.position.z < -340) p.heading = 0;
-      else if (p.position.z > 340) p.heading = Math.PI;
+      p.position.set(v.position.x, this.getGroundHeight(v.position.x, v.position.z, 'person'), v.position.z);
+      p.prevX = p.position.x;
+      p.prevZ = p.position.z;
+      p.heading = v.heading;
     }
 
     if (this.activeMode === 'car') {

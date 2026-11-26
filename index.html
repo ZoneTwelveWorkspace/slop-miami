@@ -198,19 +198,20 @@
   <!-- Bottom-Center: Third-Person Mode Switcher & Controls Guide -->
   <footer class="hud hud-bottom-center">
     <div id="hud-controls-hint" class="controls-hint"></div>
-    <nav id="mode-switch" class="panel mode-switch" aria-label="Third-Person Navigation Mode">
+    <button id="hud-interact" class="panel interact-prompt" type="button" hidden><kbd>E</kbd><span id="hud-interact-label"></span></button>
+    <nav id="mode-switch" class="panel mode-switch" aria-label="Current way of getting around (walk up to a vehicle and press E to get in)">
       <span class="mode-indicator" aria-hidden="true"></span>
-      <button id="mode-person" class="mode-btn" data-mode="person" type="button" title="Person [1]">
-        <svg class="icon" aria-hidden="true"><use href="#i-walk"/></svg><span class="mode-label">Walk</span><kbd>1</kbd>
+      <button id="mode-person" class="mode-btn active" data-mode="person" type="button" title="On foot" tabindex="-1">
+        <svg class="icon" aria-hidden="true"><use href="#i-walk"/></svg><span class="mode-label">Walk</span>
       </button>
-      <button id="mode-car" class="mode-btn active" data-mode="car" type="button" title="Car · Yellow Cab [2]">
-        <svg class="icon" aria-hidden="true"><use href="#i-car"/></svg><span class="mode-label">Drive</span><kbd>2</kbd>
+      <button id="mode-car" class="mode-btn" data-mode="car" type="button" title="Driving the taxi" tabindex="-1">
+        <svg class="icon" aria-hidden="true"><use href="#i-car"/></svg><span class="mode-label">Drive</span>
       </button>
-      <button id="mode-cyclist" class="mode-btn" data-mode="cyclist" type="button" title="Cyclist [3]">
-        <svg class="icon" aria-hidden="true"><use href="#i-bike"/></svg><span class="mode-label">Cycle</span><kbd>3</kbd>
+      <button id="mode-cyclist" class="mode-btn" data-mode="cyclist" type="button" title="Riding the bike" tabindex="-1">
+        <svg class="icon" aria-hidden="true"><use href="#i-bike"/></svg><span class="mode-label">Cycle</span>
       </button>
-      <button id="mode-helicopter" class="mode-btn" data-mode="helicopter" type="button" title="Helicopter [4]">
-        <svg class="icon" aria-hidden="true"><use href="#i-heli"/></svg><span class="mode-label">Fly</span><kbd>4</kbd>
+      <button id="mode-helicopter" class="mode-btn" data-mode="helicopter" type="button" title="Flying the helicopter" tabindex="-1">
+        <svg class="icon" aria-hidden="true"><use href="#i-heli"/></svg><span class="mode-label">Fly</span>
       </button>
     </nav>
   </footer>

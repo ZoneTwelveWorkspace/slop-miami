@@ -176,17 +176,26 @@ async function initApp() {
         controllerManager.setMode(mode);
         controllerManager.teleportActiveTo(p.x, p.z, p.heading, p.y);
       }
-      controllerManager.setMode(Object.hasOwn(controllerManager.entities, saved.activeMode) ? saved.activeMode : 'car');
+      controllerManager.setMode(Object.hasOwn(controllerManager.entities, saved.activeMode) ? saved.activeMode : 'person');
     }
   } catch { /* Missing or unavailable storage does not prevent playing. */ }
-  // First visit: every mode starts on Biscayne Blvd by Bayfront Park, the car active
+  // First visit: on foot on Biscayne Blvd by Bayfront Park, the taxi parked at the curb beside you, the bike a few steps
+  // on and the helicopter on the park's lawn. Walk up to one and press [E] to get in.
   if (!restored && TELEPORT_LOCATIONS.spawn) {
     const sp = TELEPORT_LOCATIONS.spawn;
-    for (const mode of Object.keys(controllerManager.entities)) {
+    const fx = Math.sin(sp.heading), fz = Math.cos(sp.heading); // forward
+    const lx = Math.cos(sp.heading), lz = -Math.sin(sp.heading); // left
+    const park = NYC_LANDMARKS.find((l) => l.id === 'bayfront');
+    const place = [
+      ['car', sp.x, sp.z, null],
+      ['cyclist', sp.x + lx * 6 + fx * 7, sp.z + lz * 6 + fz * 7, null],
+      ['helicopter', park ? park.x : sp.x + lx * 60, park ? park.z : sp.z + lz * 60, 0.25],
+      ['person', sp.x + lx * 3.4 - fx * 1.5, sp.z + lz * 3.4 - fz * 1.5, null]
+    ];
+    for (const [mode, x, z, alt] of place) {
       controllerManager.setMode(mode);
-      controllerManager.teleportActiveTo(sp.x, sp.z, sp.heading);
+      controllerManager.teleportActiveTo(x, z, sp.heading, alt);
     }
-    controllerManager.setMode('car');
   }
 
   function savePlayerState() {
@@ -332,10 +341,7 @@ async function initApp() {
   const elLocation = document.getElementById('hud-location');
   const elControlsHint = document.getElementById('hud-controls-hint');
   const gamepadControls = new GamepadControls(controllerManager, cameraSystem, {
-    onCycleMode: (step) => {
-      const modes = ['person', 'car', 'cyclist', 'helicopter'];
-      selectMode(modes[(modes.indexOf(controllerManager.activeMode) + step + modes.length) % modes.length]);
-    },
+    onInteract: () => interactVehicle(),
     onCycleCamera: cycleCamera,
     onToggleMap: () => mapSystem.toggleFullMap(!mapSystem.isFullMapOpen),
     onCloseMap: () => mapSystem.toggleFullMap(false)
@@ -343,10 +349,10 @@ async function initApp() {
 
   // Keyboard guide for each mode: [keys, action]
   const controlHints = {
-    person: [[['W', 'S'], 'Walk / Run'], [['A', 'D'], 'Turn'], [['Space'], 'Jump'], [['Drag'], 'Orbit']],
-    car: [[['W', 'S'], 'Drive / Reverse'], [['A', 'D'], 'Steer'], [['B'], 'Horn'], [['Drag'], 'Orbit']],
-    cyclist: [[['W', 'S'], 'Pedal / Brake'], [['Space'], 'Brake'], [['A', 'D'], 'Lean & Turn'], [['Drag'], 'Orbit']],
-    helicopter: [[['W', 'S'], 'Pitch'], [['A', 'D'], 'Yaw'], [['Space', 'E'], 'Ascend'], [['Q', 'C'], 'Descend']]
+    person: [[['W', 'S'], 'Walk / Run'], [['A', 'D'], 'Turn'], [['Space'], 'Jump'], [['E'], 'Get in'], [['Drag'], 'Orbit']],
+    car: [[['W', 'S'], 'Drive / Reverse'], [['A', 'D'], 'Steer'], [['B'], 'Horn'], [['E'], 'Get out'], [['Drag'], 'Orbit']],
+    cyclist: [[['W', 'S'], 'Pedal / Brake'], [['Space'], 'Brake'], [['A', 'D'], 'Lean & Turn'], [['E'], 'Get off'], [['Drag'], 'Orbit']],
+    helicopter: [[['W', 'S'], 'Pitch'], [['A', 'D'], 'Yaw'], [['Space'], 'Ascend'], [['Q', 'C'], 'Descend'], [['E'], 'Get out (landed)']]
   };
   // Top speeds in mph (controllers.js caps them at 8.2, 36, 19 & 52 m/s): full scale of the speed meter
   const topSpeedMph = { person: 18, car: 81, cyclist: 43, helicopter: 116 };
@@ -380,6 +386,47 @@ async function initApp() {
 
   function selectMode(mode) {
     controllerManager.setMode(mode);
+    syncModeUI();
+  }
+
+  // [E] (or a gamepad bumper, or a tap on the prompt): get into the vehicle within reach, or out of this one
+  const elInteract = document.getElementById('hud-interact');
+  const elInteractLabel = document.getElementById('hud-interact-label');
+  let interactNotice = null; // { text, until } shown in place of the prompt after a refused exit
+  function interactVehicle() {
+    const r = controllerManager.interact();
+    if (r.action === 'enter' || r.action === 'exit') {
+      interactNotice = null;
+      syncModeUI();
+      cameraSystem.resetForTeleport();
+    } else if (r.action === 'blocked') {
+      interactNotice = { text: r.reason === 'airborne' ? 'Land first to get out' : 'Slow down to get out', until: performance.now() + 1800 };
+    }
+    updateInteractPrompt();
+  }
+  if (elInteract) elInteract.addEventListener('click', () => interactVehicle());
+  const VERB_IN = { car: 'Get in', cyclist: 'Get on', helicopter: 'Board' };
+  const VERB_OUT = { car: 'Get out', cyclist: 'Get off', helicopter: 'Get out' };
+  function updateInteractPrompt() {
+    if (!elInteract) return;
+    let text = null;
+    let blocked = false;
+    if (interactNotice && performance.now() < interactNotice.until) {
+      text = interactNotice.text;
+      blocked = true;
+    } else if (controllerManager.activeMode === 'person') {
+      const v = controllerManager.nearestVehicle();
+      if (v) text = `${VERB_IN[v.type]} · ${v.label}`;
+    } else {
+      text = VERB_OUT[controllerManager.activeMode];
+    }
+    elInteract.hidden = !text;
+    elInteract.classList.toggle('blocked', blocked);
+    if (text && elInteractLabel.textContent !== text) elInteractLabel.textContent = text;
+  }
+
+  function syncModeUI() {
+    const mode = controllerManager.activeMode;
     touchControls.setMode(controllerManager.activeMode);
     gamepadControls.reset();
     modeButtons.forEach((btn) => {
@@ -467,11 +514,6 @@ async function initApp() {
     });
   });
 
-  modeButtons.forEach((btn) => {
-    btn.addEventListener('click', () => {
-      selectMode(btn.getAttribute('data-mode'));
-    });
-  });
 
   cameraButtons.forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -543,7 +585,16 @@ async function initApp() {
   }
 
   function teleportTo(x, z, heading = Math.PI) {
-    const destination = controllerManager.teleportActiveTo(x, z, heading);
+    // On foot, the taxi comes along: parked on the street at the destination, you on the curb beside it
+    let destination;
+    if (controllerManager.activeMode === 'person') {
+      controllerManager.setMode('car');
+      const car = controllerManager.teleportActiveTo(x, z, heading);
+      controllerManager.setMode('person');
+      destination = controllerManager.teleportActiveTo(car.x + Math.cos(heading) * 3.4, car.z - Math.sin(heading) * 3.4, heading);
+    } else {
+      destination = controllerManager.teleportActiveTo(x, z, heading);
+    }
     touchControls.reset();
     gamepadControls.reset();
     cameraSystem.resetForTeleport();
@@ -597,21 +648,12 @@ async function initApp() {
     });
   }
 
-  // Global keyboard shortcuts for modes (1-4), cameras (V / 5-0), and HUD (H)
+  // Global keyboard shortcuts: get in / out (E), cameras (V / 5-0), and HUD (H)
   window.addEventListener('keydown', (e) => {
     if (isTypingInField(e)) return;
     switch (e.code) {
-      case 'Digit1':
-        selectMode('person');
-        break;
-      case 'Digit2':
-        selectMode('car');
-        break;
-      case 'Digit3':
-        selectMode('cyclist');
-        break;
-      case 'Digit4':
-        selectMode('helicopter');
+      case 'KeyE':
+        if (!e.repeat) interactVehicle();
         break;
       case 'Digit5':
         selectCamera('chase', true);
@@ -762,6 +804,7 @@ async function initApp() {
     // Update 3rd-person controllers, camera, signals, traffic & vehicle collisions, building LODs, and dynamic shadow focus
     gamepadControls.update(dt);
     controllerManager.update(dt, elapsed, cameraSystem.initialized ? cameraSystem.currentPos : null);
+    updateInteractPrompt();
     cameraSystem.update(dt, elapsed);
     streetDetails.signalClock.value = elapsed;
     trafficSystem.update(

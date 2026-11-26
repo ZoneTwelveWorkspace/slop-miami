@@ -115,9 +115,9 @@ class GamepadControls {
     for (let i = 0; i < BUTTON_COUNT; i++) if (!pressed[i]) this.suppressedButtons[i] = false;
     const edge = (i) => pressed[i] && !this.previousButtons[i] && !this.suppressedButtons[i];
     const held = (i) => pressed[i] && !this.suppressedButtons[i];
-    // Capture edges before callbacks: changing mode or opening the map may synchronously call reset().
+    // Capture edges before callbacks: getting in / out or opening the map may synchronously call reset().
     const toggleMap = edge(9), closeMap = edge(1);
-    const cycleMode = Number(Boolean(edge(5))) - Number(Boolean(edge(4)));
+    const interact = edge(4) || edge(5); // bumpers: get in / out of a vehicle
     const cycleCamera = edge(3), recenter = edge(11);
     this.previousButtons = pressed;
 
@@ -141,7 +141,7 @@ class GamepadControls {
       if (closeMap) this.callbacks.onCloseMap?.();
       return;
     }
-    if (cycleMode) this.callbacks.onCycleMode?.(cycleMode);
+    if (interact) this.callbacks.onInteract?.();
     if (revision !== this.revision) return;
     if (cycleCamera) this.callbacks.onCycleCamera?.(1);
     if (revision !== this.revision) return;
